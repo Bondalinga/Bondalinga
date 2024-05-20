@@ -40,7 +40,7 @@ _G.OutlineColor = Color3.fromRGB(0, 0, 0)   -- The outline color of the text.
 _G.TextTransparency = 0.7   -- The transparency of the text.
 _G.TextFont = Drawing.Fonts.UI   -- The font of the text. (UI, System, Plex, Monospace) 
 
-_G.DisableKey = Enum.KeyCode.Q   -- The key that disables / enables the ESP.
+_G.DisableKey = Enum.KeyCode.B   -- The key that disables / enables the ESP.
 
 local function CreateESP()
     for _, v in next, Players:GetPlayers() do
