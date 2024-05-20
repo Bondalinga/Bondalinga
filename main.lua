@@ -26,16 +26,16 @@ local Camera = workspace.CurrentCamera
 
 local Typing = false
 
-_G.SendNotifications = true   -- If set to true then the script would notify you frequently on any changes applied and when loaded / errored. (If a game can detect this, it is recommended to set it to false)
+_G.SendNotifications = false   -- If set to true then the script would notify you frequently on any changes applied and when loaded / errored. (If a game can detect this, it is recommended to set it to false)
 _G.DefaultSettings = false   -- If set to true then the ESP script would run with default settings regardless of any changes you made.
 
-_G.TeamCheck = false   -- If set to true then the script would create ESP only for the enemy team members.
+_G.TeamCheck = true   -- If set to true then the script would create ESP only for the enemy team members.
 
 _G.ESPVisible = true   -- If set to true then the ESP will be visible and vice versa.
 _G.TextColor = Color3.fromRGB(255, 80, 10)   -- The color that the boxes would appear as.
 _G.TextSize = 14   -- The size of the text.
 _G.Center = true   -- If set to true then the script would be located at the center of the label.
-_G.Outline = true   -- If set to true then the text would have an outline.
+_G.Outline = false   -- If set to true then the text would have an outline.
 _G.OutlineColor = Color3.fromRGB(0, 0, 0)   -- The outline color of the text.
 _G.TextTransparency = 0.7   -- The transparency of the text.
 _G.TextFont = Drawing.Fonts.UI   -- The font of the text. (UI, System, Plex, Monospace) 
