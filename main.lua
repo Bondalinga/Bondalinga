@@ -1,195 +1,245 @@
-local function API_Check()
-    if Drawing == nil then
-        return "No"
-    else
-        return "Yes"
-    end
-end
+// ==UserScript==
+// @name         Bloxflip Crash Value Extractor with Enhanced Predictor and UI
+// @namespace    http://tampermonkey.net/
+// @version      1.8
+// @description  Extract and print crash game values from Bloxflip, with an enhanced crash predictor and a selectable UI
+// @author       ChatGPT
+// @match        https://bloxflip.com/crash
+// @grant        none
+// ==/UserScript==
 
-local Find_Required = API_Check()
+(function() {
+    'use strict';
 
-if Find_Required == "No" then
-    game:GetService("StarterGui"):SetCore("SendNotification",{
-        Title = "Exunys Developer";
-        Text = "ESP script could not be loaded because your exploit is unsupported.";
-        Duration = math.huge;
-        Button1 = "OK"
-    })
+    // Function to calculate Exponential Moving Average (EMA)
+    function calculateEMA(values, period) {
+        const alpha = 2 / (period + 1);
+        let ema = values[0]; // Initial EMA is the first value
 
-    return
-end
+        for (let i = 1; i < values.length; i++) {
+            ema = alpha * values[i] + (1 - alpha) * ema;
+        }
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
+        return ema;
+    }
 
-local Typing = false
+    // Function to fetch the game coefficient
+    function getGameCoefficient() {
+        const coefficientElement = document.querySelector('.crash_crashGameCoefficient___OC_b');
+        if (coefficientElement) {
+            const coefficientText = coefficientElement.textContent.trim();
+            return coefficientText;
+        } else {
+            console.error('Element with class "crash_crashGameCoefficient___OC_b" not found.');
+            return null;
+        }
+    }
 
-_G.SendNotifications = false   -- If set to true then the script would notify you frequently on any changes applied and when loaded / errored. (If a game can detect this, it is recommended to set it to false)
-_G.DefaultSettings = false   -- If set to true then the ESP script would run with default settings regardless of any changes you made.
+    // Predictor methods
+    const predictors = {
+        simpleAverage: {
+            name: "Simple Moving Average",
+            predict: function(values) {
+                if (values.length < 2) return "Not enough data";
 
-_G.TeamCheck = true   -- If set to true then the script would create ESP only for the enemy team members.
+                const windowSize = 5; // Number of previous values to consider (adjust as needed)
+                const recentValues = values.slice(-windowSize); // Consider all values for SMA
+                const average = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
 
-_G.ESPVisible = true   -- If set to true then the ESP will be visible and vice versa.
-_G.TextColor = Color3.fromRGB(255, 80, 10)   -- The color that the boxes would appear as.
-_G.TextSize = 14   -- The size of the text.
-_G.Center = true   -- If set to true then the script would be located at the center of the label.
-_G.Outline = false   -- If set to true then the text would have an outline.
-_G.OutlineColor = Color3.fromRGB(0, 0, 0)   -- The outline color of the text.
-_G.TextTransparency = 0.7   -- The transparency of the text.
-_G.TextFont = Drawing.Fonts.UI   -- The font of the text. (UI, System, Plex, Monospace) 
+                return average.toFixed(2);
+            }
+        },
+        exponentialSmoothing: {
+            name: "Exponential Smoothing",
+            predict: function(values) {
+                if (values.length < 2) return "Not enough data";
 
-_G.DisableKey = Enum.KeyCode.B   -- The key that disables / enables the ESP.
+                const alpha = 0.2; // Smoothing factor (adjust as needed)
+                let forecast = values[values.length - 1]; // Initial forecast
 
-local function CreateESP()
-    for _, v in next, Players:GetPlayers() do
-        if v.Name ~= Players.LocalPlayer.Name then
-            local ESP = Drawing.new("Text")
+                for (let i = 1; i < values.length; i++) {
+                    forecast = alpha * values[i] + (1 - alpha) * forecast;
+                }
 
-            RunService.RenderStepped:Connect(function()
-                if workspace:FindFirstChild(v.Name) ~= nil and workspace[v.Name]:FindFirstChild("HumanoidRootPart") ~= nil then
-                    local Vector, OnScreen = Camera:WorldToViewportPoint(workspace[v.Name]:WaitForChild("Head", math.huge).Position)
+                return forecast.toFixed(2);
+            }
+        },
+        medianPredictor: {
+            name: "Median Predictor",
+            predict: function(values) {
+                if (values.length < 2) return "Not enough data";
 
-                    ESP.Size = _G.TextSize
-                    ESP.Center = _G.Center
-                    ESP.Outline = _G.Outline
-                    ESP.OutlineColor = _G.OutlineColor
-                    ESP.Color = _G.TextColor
-                    ESP.Transparency = _G.TextTransparency
-                    ESP.Font = _G.TextFont
+                // Sort values and find the median
+                const sortedValues = values.slice().sort((a, b) => a - b);
+                const middle = Math.floor(sortedValues.length / 2);
+                const median = sortedValues.length % 2 === 0 ?
+                               (sortedValues[middle - 1] + sortedValues[middle]) / 2 :
+                               sortedValues[middle];
 
-                    if OnScreen == true then
-                        local Part1 = workspace:WaitForChild(v.Name, math.huge):WaitForChild("HumanoidRootPart", math.huge).Position
-                        local Part2 = workspace:WaitForChild(Players.LocalPlayer.Name, math.huge):WaitForChild("HumanoidRootPart", math.huge).Position or 0
-                        local Dist = (Part1 - Part2).Magnitude
-                        ESP.Position = Vector2.new(Vector.X, Vector.Y - 25)
-                        ESP.Text = ("("..tostring(math.floor(tonumber(Dist)))..") "..v.Name.." ["..workspace[v.Name].Humanoid.Health.."]")
-                        if _G.TeamCheck == true then 
-                            if Players.LocalPlayer.Team ~= v.Team then
-                                ESP.Visible = _G.ESPVisible
-                            else
-                                ESP.Visible = false
-                            end
-                        else
-                            ESP.Visible = _G.ESPVisible
-                        end
-                    else
-                        ESP.Visible = false
-                    end
-                else
-                    ESP.Visible = false
-                end
-            end)
+                return median.toFixed(2);
+            }
+        },
+        weightedAverage: {
+            name: "Weighted Average",
+            predict: function(values) {
+                if (values.length < 2) return "Not enough data";
 
-            Players.PlayerRemoving:Connect(function()
-                ESP.Visible = false
-            end)
-        end
-    end
+                // Calculate weighted average based on frequency of occurrence
+                const valueCount = {};
+                values.forEach(value => {
+                    if (valueCount[value]) {
+                        valueCount[value]++;
+                    } else {
+                        valueCount[value] = 1;
+                    }
+                });
 
-    Players.PlayerAdded:Connect(function(Player)
-        Player.CharacterAdded:Connect(function(v)
-            if v.Name ~= Players.LocalPlayer.Name then 
-                local ESP = Drawing.new("Text")
-    
-                RunService.RenderStepped:Connect(function()
-                    if workspace:FindFirstChild(v.Name) ~= nil and workspace[v.Name]:FindFirstChild("HumanoidRootPart") ~= nil then
-                        local Vector, OnScreen = Camera:WorldToViewportPoint(workspace[v.Name]:WaitForChild("Head", math.huge).Position)
-    
-                        ESP.Size = _G.TextSize
-                        ESP.Center = _G.Center
-                        ESP.Outline = _G.Outline
-                        ESP.OutlineColor = _G.OutlineColor
-                        ESP.Color = _G.TextColor
-                        ESP.Transparency = _G.TextTransparency
-    
-                        if OnScreen == true then
-                            local Part1 = workspace:WaitForChild(v.Name, math.huge):WaitForChild("HumanoidRootPart", math.huge).Position
-                        local Part2 = workspace:WaitForChild(Players.LocalPlayer.Name, math.huge):WaitForChild("HumanoidRootPart", math.huge).Position or 0
-                            local Dist = (Part1 - Part2).Magnitude
-                            ESP.Position = Vector2.new(Vector.X, Vector.Y - 25)
-                            ESP.Text = ("("..tostring(math.floor(tonumber(Dist)))..") "..v.Name.." ["..workspace[v.Name].Humanoid.Health.."]")
-                            if _G.TeamCheck == true then 
-                                if Players.LocalPlayer.Team ~= Player.Team then
-                                    ESP.Visible = _G.ESPVisible
-                                else
-                                    ESP.Visible = false
-                                end
-                            else
-                                ESP.Visible = _G.ESPVisible
-                            end
-                        else
-                            ESP.Visible = false
-                        end
-                    else
-                        ESP.Visible = false
-                    end
-                end)
-    
-                Players.PlayerRemoving:Connect(function()
-                    ESP.Visible = false
-                end)
-            end
-        end)
-    end)
-end
+                let totalWeight = 0;
+                let weightedSum = 0;
 
-if _G.DefaultSettings == true then
-    _G.TeamCheck = false
-    _G.ESPVisible = true
-    _G.TextColor = Color3.fromRGB(40, 90, 255)
-    _G.TextSize = 14
-    _G.Center = true
-    _G.Outline = false
-    _G.OutlineColor = Color3.fromRGB(0, 0, 0)
-    _G.DisableKey = Enum.KeyCode.Q
-    _G.TextTransparency = 0.75
-end
+                for (const value in valueCount) {
+                    const weight = valueCount[value];
+                    totalWeight += weight;
+                    weightedSum += value * weight;
+                }
 
-UserInputService.TextBoxFocused:Connect(function()
-    Typing = true
-end)
+                const weightedAverage = weightedSum / totalWeight;
+                return weightedAverage.toFixed(2);
+            }
+        },
+        lowPredictor: {
+            name: "Low Predictor",
+            predict: function(values) {
+                if (values.length < 2) return "Not enough data";
 
-UserInputService.TextBoxFocusReleased:Connect(function()
-    Typing = false
-end)
+                const windowSize = 5; // Number of previous values to consider (adjust as needed)
+                const recentValues = values.slice(-windowSize).filter(value => value <= 4); // Filter values <= 4
+                const average = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
 
-UserInputService.InputBegan:Connect(function(Input)
-    if Input.KeyCode == _G.DisableKey and Typing == false then
-        _G.ESPVisible = not _G.ESPVisible
-        
-        if _G.SendNotifications == true then
-            game:GetService("StarterGui"):SetCore("SendNotification",{
-                Title = "Exunys Developer";
-                Text = "The ESP's visibility is now set to "..tostring(_G.ESPVisible)..".";
-                Duration = 5;
-            })
-        end
-    end
-end)
+                // Ensure the predicted value is lower than the average
+                const lowPrediction = Math.max(1, average - 0.5); // Adjust the offset as needed
 
-local Success, Errored = pcall(function()
-    CreateESP()
-end)
+                return lowPrediction.toFixed(2);
+            }
+        },
+        safePredictor: {
+            name: "Safe Predictor (Simple MA)",
+            predict: function(values) {
+                if (values.length < 2) return "Not enough data";
 
-if Success and not Errored then
-    if _G.SendNotifications == true then
-        game:GetService("StarterGui"):SetCore("SendNotification",{
-            Title = "Exunys Developer";
-            Text = "ESP script has successfully loaded.";
-            Duration = 5;
-        })
-    end
-elseif Errored and not Success then
-    if _G.SendNotifications == true then
-        game:GetService("StarterGui"):SetCore("SendNotification",{
-            Title = "Exunys Developer";
-            Text = "ESP script has errored while loading, please check the developer console! (F9)";
-            Duration = 5;
-        })
-    end
-    TestService:Message("The ESP script has errored, please notify Exunys with the following information :")
-    warn(Errored)
-    print("!! IF THE ERROR IS A FALSE POSITIVE (says that a player cannot be found) THEN DO NOT BOTHER !!")
-end
+                const windowSize = 5; // Number of previous values to consider (adjust as needed)
+                const recentValues = values.slice(-windowSize); // Get the last 'windowSize' values
+                const average = recentValues.reduce((a, b) => a + b, 0) / windowSize;
+
+                // Ensure the predicted value is not too low
+                const safePrediction = Math.max(1.2, average); // Adjust the floor value as needed
+
+                return safePrediction.toFixed(2);
+            }
+        },
+        macd: {
+            name: "MACD",
+            predict: function(values) {
+                if (values.length < 3) return "Not enough data";
+
+                // Calculate the MACD
+                const shortTerm = 5; // Short-term EMA period
+                const longTerm = 10; // Long-term EMA period
+                const signalLine = 3; // Signal line period
+
+                const shortEMA = calculateEMA(values, shortTerm);
+                const longEMA = calculateEMA(values, longTerm);
+
+                const MACDLine = shortEMA - longEMA;
+                const signalEMA = calculateEMA([MACDLine], signalLine);
+
+                return Math.max(1, signalEMA).toFixed(2); // Ensure prediction is at least 1
+            }
+        },
+    };
+
+    let selectedPredictor = predictors.simpleAverage; // Default predictor
+
+    // Function to create the UI
+    function createUI() {
+        const uiContainer = document.createElement('div');
+        uiContainer.id = 'crashPredictorUI';
+        uiContainer.style.position = 'fixed';
+        uiContainer.style.bottom = '10px'; // Position at the bottom
+        uiContainer.style.left = '10px'; // Position at the left
+        uiContainer.style.padding = '5px'; // Increase padding for larger UI
+        uiContainer.style.width = '300px'; // Set a wider width
+        uiContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        uiContainer.style.color = 'white';
+        uiContainer.style.borderRadius = '10px'; // Increase border radius for rounded corners
+        uiContainer.style.zIndex = '100000'; // Set a high z-index to ensure it's above everything
+        uiContainer.style.fontFamily = 'Arial, sans-serif';
+        uiContainer.style.fontSize = '14px'; // Adjust font size as needed
+        uiContainer.innerHTML = `
+        <h3 style="font-size: 18px;">Crash Predictor</h3>
+        <div>
+            <label for="predictorSelect">Select Predictor:</label>
+            <select id="predictorSelect" style="font-size: 14px;">
+                ${Object.keys(predictors).map(key => `<option value="${key}">${predictors[key].name}</option>`).join('')}
+            </select>
+        </div>
+        <div id="crashValues"></div>
+        <div id="crashPrediction"></div>
+        <div id="gameCoefficient"></div> <!-- Display game coefficient here -->
+    `;
+        document.body.appendChild(uiContainer);
+
+        // Event listener for predictor selection
+        const predictorSelect = document.getElementById('predictorSelect');
+        predictorSelect.addEventListener('change', function() {
+            selectedPredictor = predictors[this.value];
+            extractValues(); // Refresh values with new predictor
+        });
+    }
+
+
+    // Function to update the UI with new values and prediction
+    function updateUI(prediction) {
+        const predictionContainer = document.getElementById('crashPrediction');
+        const coefficientContainer = document.getElementById('gameCoefficient');
+
+        predictionContainer.innerHTML = `<strong>Predicted Next Crash Value:</strong> ${prediction}`;
+        coefficientContainer.innerHTML = `<strong>Current Payout:</strong> ${getGameCoefficient()}`;
+    }
+
+    // Function to extract and print the values
+    function extractValues() {
+        const elements = document.querySelectorAll('.gameLatest.gameLatestHorizontal.lastestHistory .gameLatestItem');
+        let values = [];
+
+        elements.forEach(element => {
+            const value = parseFloat(element.textContent);
+            if (!isNaN(value) && value <= 5) { // Check if value is a valid number and <= 5
+                values.push(value);
+            }
+        });
+
+        // Call the selected predictor function with the extracted values
+        const prediction = selectedPredictor.predict(values);
+
+        // Update the UI with the new values and prediction
+        updateUI(prediction);
+    }
+
+
+    // Function to start the loop
+    function startLoop() {
+        setInterval(() => {
+            extractValues();
+        }, 10); // Update every 5 seconds
+    }
+
+    // Wait for the page to load and elements to be available
+    window.addEventListener('load', () => {
+        // Create the UI
+        createUI();
+
+        // Start the loop
+        startLoop();
+    });
+})();
