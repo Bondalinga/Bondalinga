@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bloxflip Crash Value Extractor with Enhanced Predictor and UI
 // @namespace    http://tampermonkey.net/
-// @version      1.8
+// @version      1.9
 // @description  Extract and print crash game values from Bloxflip, with an enhanced crash predictor and a selectable UI
 // @author       ChatGPT
 // @match        https://bloxflip.com/crash
@@ -123,7 +123,7 @@
             }
         },
         safePredictor: {
-            name: "Safe Predictor (Simple MA)",
+            name: "Safe Predictor",
             predict: function(values) {
                 if (values.length < 2) return "Not enough data";
 
@@ -158,8 +158,6 @@
         },
     };
 
-    let selectedPredictor = predictors.simpleAverage; // Default predictor
-
     // Function to create the UI
     function createUI() {
         const uiContainer = document.createElement('div');
@@ -176,39 +174,47 @@
         uiContainer.style.fontFamily = 'Arial, sans-serif';
         uiContainer.style.fontSize = '14px'; // Adjust font size as needed
         uiContainer.innerHTML = `
-        <h3 style="font-size: 18px;">Crash Predictor</h3>
-        <div>
-            <label for="predictorSelect">Select Predictor:</label>
-            <select id="predictorSelect" style="font-size: 14px;">
-                ${Object.keys(predictors).map(key => `<option value="${key}">${predictors[key].name}</option>`).join('')}
-            </select>
-        </div>
-        <div id="crashValues"></div>
-        <div id="crashPrediction"></div>
-        <div id="gameCoefficient"></div> <!-- Display game coefficient here -->
-    `;
+            <h3 style="font-size: 18px;">Crash Predictor</h3>
+            <div id="crashValues"></div>
+            <div id="crashPrediction"></div>
+            <div id="conf"></div>
+            <div id="tenper"></div>
+            <div id="gameCoefficient"></div> <!-- Display game coefficient here -->
+        `;
         document.body.appendChild(uiContainer);
-
-        // Event listener for predictor selection
-        const predictorSelect = document.getElementById('predictorSelect');
-        predictorSelect.addEventListener('change', function() {
-            selectedPredictor = predictors[this.value];
-            extractValues(); // Refresh values with new predictor
-        });
     }
 
-
-    // Function to update the UI with new values and prediction
-    function updateUI(prediction) {
+    // Function to update the UI with new values and predictions
+    function updateUI(averagePrediction, confidenceLevel, tenper) {
         const predictionContainer = document.getElementById('crashPrediction');
         const coefficientContainer = document.getElementById('gameCoefficient');
+        const conf = document.getElementById('conf');
+        const tenperc = document.getElementById('tenper');
 
-        predictionContainer.innerHTML = `<strong>Predicted Next Crash Value:</strong> ${prediction}`;
-        coefficientContainer.innerHTML = `<strong>Current Payout:</strong> ${getGameCoefficient()}`;
+        if (!predictionContainer || !coefficientContainer) {
+            console.error('UI containers not found.');
+            return;
+        }
+
+        // Update prediction container with text content
+        predictionContainer.textContent = `Predicted Next Crash Value: ${averagePrediction.toFixed(2)}`;
+
+        // Update confidence level container with text content
+        conf.textContent = `Confidence: ${confidenceLevel.toFixed(2)}`;
+
+        // Update 10% value container with text content
+        tenperc.textContent = `10% Of Total: ${tenper.toFixed(2)}`;
+
+        // Update coefficient container with text content
+        coefficientContainer.textContent = `Current Payout: ${getGameCoefficient()}`;
     }
 
-    // Function to extract and print the values
     function extractValues() {
+        let element = document.querySelector('.text_text__fMaR4.text_regular16__7x_ra span');
+        let textContent = element.innerText.trim(); // Get the trimmed text content
+        let tenper = parseFloat(textContent) / 10; // Convert to number and divide by 10
+
+
         const elements = document.querySelectorAll('.gameLatest.gameLatestHorizontal.lastestHistory .gameLatestItem');
         let values = [];
 
@@ -219,13 +225,41 @@
             }
         });
 
-        // Call the selected predictor function with the extracted values
-        const prediction = selectedPredictor.predict(values);
+        // Call all predictor functions with the extracted values
+        const predictions = [];
+        for (const key in predictors) {
+            if (Object.prototype.hasOwnProperty.call(predictors, key)) {
+                predictions.push(predictors[key].predict(values));
+            }
+        }
 
-        // Update the UI with the new values and prediction
-        updateUI(prediction);
+        // Calculate the weighted average of all predictions
+        const validPredictions = predictions.filter(p => !isNaN(p));
+        let sumWeightedPredictions = 0;
+        let totalWeight = 0;
+
+        validPredictions.forEach((prediction, index) => {
+            // Adjusted weight calculation
+            const weight = 1 / (index + 1); // Linear decrease in weight
+            sumWeightedPredictions += prediction * weight;
+            totalWeight += weight;
+        });
+
+        let averagePrediction = sumWeightedPredictions / totalWeight;
+
+        // Normalize predictions to range between 0 and 5
+        averagePrediction = Math.min(Math.max(averagePrediction, 0), 5);
+
+        // Adjusted confidence level calculation
+        let confidenceLevel = 0;
+        if (validPredictions.length > 0) {
+            const maxPrediction = Math.max(...validPredictions);
+            confidenceLevel = (averagePrediction / maxPrediction) * 100; // Adjust multiplier as needed
+        }
+
+        // Update the UI with the average prediction and confidence level
+        updateUI(averagePrediction, confidenceLevel, tenper);
     }
-
 
     // Function to start the loop
     function startLoop() {
